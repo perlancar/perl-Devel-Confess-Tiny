@@ -9,40 +9,40 @@ use warnings;
 #END IFUNBUILT
 
 # BEGIN_BLOCK: stacktrace_printer
+sub _longmess {
+    my $mess = $_[0];
+    my $i = 2;
+    {
+        package DB;
+        while (my @caller = caller($i)) {
+            $mess .= "\t";
+            if ($i > 1 && $caller[3]) { # subroutine
+                $mess .= "$caller[3](";
+                if ($caller[4]) { # has_args
+                    my $j = 0;
+                    for my $arg0 (@DB::args) {
+                        my $arg = $arg0; # copy
+                        if ($j++) { $mess .= ", " }
+                        if (!defined($arg)) { $arg = "undef" }
+                        elsif (ref($arg)) { }
+                        else { $arg =~ s/([\\'])/\\$1/g; $arg = "'$arg'" }
+                        $mess .= $arg;
+                    }
+                }
+                $mess .= ") called ";
+            }
+            $mess .= "at $caller[1] line $caller[2]\n";
+            $i++;
+        }
+    }
+    $mess;
+}
+
 my %OLD_SIG;
 BEGIN {
     @OLD_SIG{qw/__DIE__ __WARN__/} = @SIG{qw/__DIE__ __WARN__/};
-    my $longmess = sub {
-        my $mess = '';
-        my $i = 2;
-        {
-            package DB;
-            while (my @caller = caller($i)) {
-                if ($i == 2) { $mess .= $_[0] }
-                $mess .= "\t";
-                if ($caller[3]) { # subroutine
-                    $mess .= "$caller[3](";
-                    if ($caller[4]) { # has_args
-                        my $j = 0;
-                        for my $arg0 (@DB::args) {
-                            my $arg = $arg0; # copy
-                            if ($j++) { $mess .= ", " }
-                            if (!defined($arg)) { $arg = "undef" }
-                            elsif (ref($arg)) { }
-                            else { $arg =~ s/([\\'])/\\$1/g; $arg = "'$arg'" }
-                            $mess .= $arg;
-                        }
-                    }
-                    $mess .= ") called ";
-                }
-                $mess .= "at $caller[1] line $caller[2]\n";
-                $i++;
-            }
-        }
-        $mess;
-    };
-    $SIG{__DIE__}  = sub { die $longmess->(@_) };
-    $SIG{__WARN__} = sub { warn $longmess->(@_) };
+    $SIG{__DIE__}  = sub { die @_ if ref($_[0]); die &_longmess };
+    $SIG{__WARN__} = sub { warn &_longmess };
 }
 
 END {
